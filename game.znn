@@ -1,0 +1,118 @@
+
+export import "std/vector.znn";
+export import "vec2.znn";
+export import "rectangle.znn";
+
+import "std/range.znn";
+export import "board_canvas.znn";
+import "std/random.znn";
+
+export struct Game {
+  Rectangle bounds;
+  vector<Vec2> snake;
+  Direction4 snakeDir;
+  vector<Vec2> apples;
+};
+
+export Game(Rectangle bounds, int initialLength, int numApples) {
+  mutable positions = vector<Vec2>();
+  const tailPos = Vec2((bounds.begin.x + bounds.end.x) / 2, bounds.end.y - 2);
+  const direction = Direction4::N;
+  for (mutable i : range(0, initialLength))
+    positions.push_back(tailPos - Vec2(direction) * i + Vec2(direction) * (initialLength - 1));
+  mutable apples = vector<Vec2>();
+  for (mutable i : range(0, numApples)) {
+    while (true) {
+      const pos = Vec2(get_random(bounds.x_range()), get_random(bounds.y_range()));
+      if (!apples.find(&pos) && !positions.find(&pos)) {
+        apples.push_back(move(pos));
+        break;
+      }
+    }
+  }
+  return Game::Game(move(bounds), move(positions), direction, move(apples));
+}
+
+export bool won(Game* game) {
+  return game->apples.empty();
+}
+
+int getImageIndex(vector<Vec2>* snake, int index) {
+  if (index == 0) {
+    const pos2 = (*snake)[index].copy();
+    const pos3 = (*snake)[index + 1].copy();
+    return 12 + (pos2 - pos3).getDir4()->asInt();
+  }
+  if (index == snake->size() - 1) {
+    const pos2 = (*snake)[index - 1].copy();
+    const pos3 = (*snake)[index].copy();
+    return 16 + (pos2 - pos3).getDir4()->asInt();
+  }
+  const pos1 = (*snake)[index - 1].copy();
+  const pos2 = (*snake)[index].copy();
+  const pos3 = (*snake)[index + 1].copy();
+  const dir1 = *(pos2 - pos1).getDir4();
+  const dir2 = *(pos3 - pos2).getDir4();
+  if (dir1 == dir2)
+    return dir1.asInt();
+  else {
+    mutable plus = 0;
+    if (dir2.asInt() == (dir1.asInt() + 1) % 4)
+      plus = 4;
+    return 4 + dir2.asInt() + plus;
+  }
+}
+
+export void render(Game* game, BoardCanvas* canvas, vector<SDLSurface>* snakeImages,
+    SDLSurface* appleImage) {
+  for (mutable pos : game->apples)
+    canvas->drawImage(pos->copy(), appleImage);
+  for (mutable i : range(0, game->snake.size()))
+    canvas->drawImage(game->snake[i].copy(), &(*snakeImages)[getImageIndex(&game->snake, i)]);
+}
+
+Vec2 advance(vector<Vec2> mutable* positions, Direction4 dir) {
+  const ret = positions->back()->copy();
+  for (mutable i = positions->size() - 1; i > 0; --i)
+    (*positions)[i] = (*positions)[i - 1].copy();
+  (*positions)[0] = (*positions)[0] + Vec2(dir);
+  return move(ret);
+}
+
+bool isCollision(Game* game) {
+  for (mutable pos : game->snake)
+    if (!game->bounds.contains(&*pos))
+      return true;
+  for (mutable i : range(0, game->snake.size()))
+    for (mutable j : range(0, i))
+      if (game->snake[i] == game->snake[j])
+        return true;
+  return false;
+}
+
+export enum GameUpdateResult {
+  EAT,
+  GAME_OVER,
+  NONE
+};
+
+export GameUpdateResult update(Game mutable* game) {
+  const trail = advance(&game->snake, game->snakeDir);
+  if (const index = game->apples.find(&game->snake[0])) {
+    game->apples.remove(*index);
+    game->snake.push_back(move(trail));
+    return GameUpdateResult::EAT;
+  }
+  if (game->isCollision())
+    return GameUpdateResult::GAME_OVER;
+  return GameUpdateResult::NONE;
+}
+
+export void turnLeft(Game mutable* game) {
+  game->snakeDir = game->snakeDir.rotateLeft();
+}
+
+export void turnRight(Game mutable* game) {
+  game->snakeDir = game->snakeDir.rotateRight();
+}
+

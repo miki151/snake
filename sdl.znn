@@ -1,0 +1,327 @@
+
+
+embed {
+#include <SDL.h>
+#include <SDL_ttf.h>
+#include <SDL_mixer.h>
+}
+
+export import "std/expected.znn";
+export import "std/enum_map.znn";
+
+export import "color.znn";
+export import "vec2.znn";
+export import "rectangle.znn";
+
+export struct SDL_Window;
+extern struct SDL_Window;
+export struct SDL_Surface;
+extern struct SDL_Surface;
+export struct SDL_Renderer;
+extern struct SDL_Renderer;
+export struct TTF_Font;
+extern struct TTF_Font;
+export struct Mix_Chunk;
+extern struct Mix_Chunk;
+
+export enum TextSize {
+  SMALL,
+  LARGE
+};
+
+export struct SDLWindow {
+  SDL_Window mutable* window;
+  enum_map<TextSize, TTF_Font mutable*> fonts;
+};
+
+export struct SDLSurface {
+  SDL_Surface mutable* surface;
+};
+
+export expected<SDLSurface> getSurface(SDLWindow* window) {
+  mutable SDLSurface? ret = null;
+  mutable string? errorRet = null;
+  embed {
+    auto surface = SDL_GetWindowSurface(window->window);
+    if (!surface)
+      errorRet = zenon_string(SDL_GetError());
+    else
+      ret = SDLSurface{surface};
+  }
+  if (ret)
+    return result(*move(ret));
+  else
+    return error<SDLSurface>(*errorRet);
+}
+
+export struct SDLSound {
+  Mix_Chunk mutable* chunk;
+};
+
+export expected<SDLSound> SDLLoadSound(string path) {
+  const getResult = [](Mix_Chunk mutable* s) -> expected<SDLSound> {
+    return result(SDLSound(s));
+  };
+  const getError = [](string s) -> expected<SDLSound> {
+    return error<SDLSound>(s);
+  };
+  embed {
+    if (auto sound = Mix_LoadWAV(path.data()))
+      return invoke(&getResult, sound);
+    else
+      return invoke(&getError, zenon_string(Mix_GetError()));
+  }
+}
+
+export string? SDLPlaySound(SDLSound* sound, int channel) {
+  embed {
+    if (Mix_PlayChannel(channel, sound->chunk, 0) < 0)
+      return zenon_string(Mix_GetError());
+  }
+  return null;
+}
+
+export enum SDLTransformType {
+  NONE,
+  ROTATE_LEFT,
+  MIRROR_HOR
+};
+
+export expected<SDLSurface> transform(SDLSurface* source, SDLTransformType transformType) {
+  const getResult = [](SDL_Surface mutable* s) -> expected<SDLSurface> {
+    return result(SDLSurface(s));
+  };
+  const getError = [](string s) -> expected<SDLSurface> {
+    return error<SDLSurface>(s);
+  };
+  embed {
+    auto surface = SDL_ConvertSurface(source->surface, source->surface->format, 0);
+    if (!surface)
+      return invoke(&getError, zenon_string(SDL_GetError()));
+    Uint8* sourcePixels = (Uint8*)source->surface->pixels;
+    Uint8* targetPixels = (Uint8*)surface->pixels;
+    if (transformType != SDLTransformType::NONE) {
+      SDL_LockSurface(surface);
+      for (int x = 0; x < source->surface->w; ++x)
+        for (int y = 0; y < source->surface->h; ++y)
+          for (int b = 0; b < 4; ++b) {
+            auto sourcePos = Vec2{y, surface->w - x - 1};
+            if (transformType == SDLTransformType::MIRROR_HOR)
+              sourcePos = Vec2{sourcePos.y, sourcePos.x};
+            targetPixels[y * surface->pitch + x * sizeof(Uint32) + b] =
+              sourcePixels[sourcePos.y * source->surface->pitch + sourcePos.x * sizeof(Uint32) + b];
+          }
+      SDL_UnlockSurface(surface);
+    }
+    return invoke(&getResult, surface);
+  }
+}
+
+export string? blitFrom(SDLSurface* dst, Vec2 coord, SDLSurface* src) {
+  embed {
+    SDL_Rect rect{coord.x, coord.y, src->surface->w, src->surface->h};
+    if (SDL_BlitSurface(src->surface, nullptr, dst->surface, &rect) != 0)
+      return zenon_string(SDL_GetError());
+  }
+  return null;
+}
+
+export Vec2 getSize(SDLSurface* s) {
+  embed {
+  return Vec2{s->surface->w, s->surface->h};
+  }
+}
+
+export expected<SDLSurface> SDL_LoadBMP(string path) {
+  mutable SDLSurface? ret = null;
+  mutable string? errorRet = null;
+  embed {
+    if (auto res = SDL_LoadBMP(path.data()))
+      ret = SDLSurface{res};
+    else
+      errorRet = zenon_string(SDL_GetError());
+  }
+  if (ret)
+    return result(*move(ret));
+  else
+    return error<SDLSurface>(*errorRet);
+}
+
+export expected<SDLSurface> drawText(SDLWindow* window, string text, Color color, TextSize size) {
+  mutable SDLSurface? ret = null;
+  mutable string? errorRet = null;
+  embed {
+    SDL_Color sdlColor = {(Uint8)color.r, (Uint8)color.g, (Uint8)color.b};
+    SDL_Surface* surfaceMessage =
+        TTF_RenderText_Solid(window->fonts.values[int(size)], text.data(), sdlColor);
+    if (surfaceMessage)
+      ret = SDLSurface{surfaceMessage};
+    else
+      errorRet = TTF_GetError();
+  }
+  if (ret)
+    return result(*move(ret));
+  else
+    return error<SDLSurface>(*errorRet);
+}
+
+export string? update(SDLWindow* window) {
+  embed {
+    if (SDL_UpdateWindowSurface(window->window) != 0)
+      return zenon_string(SDL_GetError());
+  }
+  return null;
+}
+
+export string? clear(SDLSurface* s, Color color) {
+  embed {
+    if (SDL_FillRect(s->surface, nullptr, SDL_MapRGB(s->surface->format, color.r, color.g, color.b)) != 0)
+      return zenon_string(SDL_GetError());
+  }
+  return null;
+}
+
+export string? drawFilledRectangle(SDLSurface* s, Rectangle* rect, Color color) {
+  embed {
+    SDL_Rect sdlRect;
+    sdlRect.x = rect->begin.x;
+    sdlRect.y = rect->begin.y;
+    sdlRect.w = rect->end.x - rect->begin.x;
+    sdlRect.h = rect->end.y - rect->begin.y;
+    if (SDL_FillRect(s->surface, &sdlRect, SDL_MapRGB(s->surface->format, color.r, color.g, color.b)) != 0)
+      return zenon_string(SDL_GetError());
+  }
+  return null;
+}
+
+export expected<SDLWindow> SDL_CreateWindow(Vec2? size) {
+  mutable SDLWindow? ret = null;
+  mutable string? errorRet = null;
+  const gen_error = [] (string s) -> expected<SDLWindow> {
+    return error<SDLWindow>(s);
+  };
+  embed {
+    SDL_Rect gScreenRect = { 0, 0, 320, 240 };
+    SDL_DisplayMode displayMode;
+    if( SDL_GetCurrentDisplayMode( 0, &displayMode ) == 0 ) {
+      gScreenRect.w = displayMode.w;
+      gScreenRect.h = displayMode.h;
+    }
+
+    auto window = SDL_CreateWindow( "SDL Tutorial", SDL_WINDOWPOS_UNDEFINED,
+        SDL_WINDOWPOS_UNDEFINED, size ? size->x : gScreenRect.w, size ? size->y : gScreenRect.y,
+        SDL_WINDOW_SHOWN );
+    if (!window)
+      return invoke(&gen_error, zenon_string(SDL_GetError()));
+    if(TTF_Init() == -1)
+      return invoke(&gen_error, zenon_string(TTF_GetError()));
+    std::array<TTF_Font*, 2> fonts;
+    fonts[0] = TTF_OpenFont("font.ttf", 32);
+    if (!fonts[0])
+      return invoke(&gen_error, zenon_string(TTF_GetError()));
+    fonts[1] = TTF_OpenFont("font.ttf", 64);
+    if (!fonts[1])
+      return invoke(&gen_error, zenon_string(TTF_GetError()));
+    ret = SDLWindow{window, {fonts}};
+  }
+  return result(*move(ret));
+}
+
+export struct SDLQuitEvent {
+};
+
+export enum KeyType {
+  UP,
+  DOWN,
+  LEFT,
+  RIGHT,
+  ESCAPE
+};
+
+export struct SDLKeyEvent {
+  KeyType key;
+};
+
+export struct SDLUnknownEvent {
+};
+
+export enum SDLMouseButtonType {
+  LEFT,
+  MIDDLE,
+  RIGHT
+};
+
+export struct SDLMouseButtonEvent {
+  SDLMouseButtonType buttonType;
+  Vec2 pos;
+};
+
+export variant SDLEvent {
+  SDLQuitEvent quit;
+  SDLKeyEvent key;
+  SDLMouseButtonEvent mouseDown;
+  SDLUnknownEvent unknown;
+};
+
+export void SDLFlushEvents() {
+  while (!!SDLPollEvent()) {}
+}
+
+export SDLEvent? SDLPollEvent() {
+  embed {
+    SDL_Event event;
+    if (SDL_PollEvent(&event)) {
+      if (event.type == SDL_QUIT)
+        return SDLEvent::quit(SDLQuitEvent{});
+      if (event.type == SDL_KEYDOWN)
+        switch (event.key.keysym.sym) {
+          case SDLK_UP:    return SDLEvent::key(SDLKeyEvent{ KeyType::UP });
+          case SDLK_LEFT:  return SDLEvent::key(SDLKeyEvent{ KeyType::LEFT });
+          case SDLK_RIGHT: return SDLEvent::key(SDLKeyEvent{ KeyType::RIGHT });
+          case SDLK_DOWN:  return SDLEvent::key(SDLKeyEvent{ KeyType::DOWN });
+          case SDLK_ESCAPE:return SDLEvent::key(SDLKeyEvent{ KeyType::ESCAPE });
+          default: break;
+        }
+      if (event.type == SDL_MOUSEBUTTONDOWN) {
+        SDLMouseButtonType button = SDLMouseButtonType::LEFT;
+        switch (event.button.button) {
+          case SDL_BUTTON_LEFT:
+            button = SDLMouseButtonType::LEFT;
+            break;
+          case SDL_BUTTON_RIGHT:
+            button = SDLMouseButtonType::RIGHT;
+            break;
+          case SDL_BUTTON_MIDDLE:
+            button = SDLMouseButtonType::MIDDLE;
+            break;
+        }
+        return SDLEvent::mouseDown(SDLMouseButtonEvent{ button, Vec2{event.button.x, event.button.y} });
+      }
+      return SDLEvent::unknown(SDLUnknownEvent{});
+    }
+  }
+  return null;
+}
+
+export string? SDLInit() {
+  embed {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0)
+      return zenon_string(SDL_GetError());
+    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0)
+      return zenon_string(Mix_GetError());
+    Mix_ReserveChannels(1);
+  }
+  return null;
+}
+
+export string SDLWriteDirectoryPath(string appId) {
+  embed {
+    return zenon_string(SDL_GetPrefPath("com.zenon", appId.data()));
+  }
+}
+
+export void SDLDelay(int time) {
+  embed {
+    SDL_Delay(time);
+  }
+}

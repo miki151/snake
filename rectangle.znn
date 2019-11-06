@@ -1,0 +1,69 @@
+
+export import "vec2.znn";
+import "std/range.znn";
+
+export struct Rectangle {
+  Vec2 begin;
+  Vec2 end;
+};
+
+export bool contains(Rectangle* r, Vec2* pos) {
+  return pos->x >= r->begin.x && pos->y >= r->begin.y && pos->y < r->end.y && pos->x < r->end.x;
+}
+
+export Vec2 size(Rectangle* r) {
+  return r->end - r->begin;
+}
+
+export bool overlaps(Rectangle* r1, Rectangle* r2) {
+  const x1 = r1->x_range();
+  const x2 = r2->x_range();
+  const y1 = r1->y_range();
+  const y2 = r2->y_range();
+  return x1.overlaps(&x2) && y1.overlaps(&y2);
+}
+
+export struct range;
+
+export range x_range(Rectangle* r) {
+  return range(r->begin.x, r->end.x);
+}
+
+export range y_range(Rectangle* r) {
+  return range(r->begin.y, r->end.y);
+}
+
+export Rectangle copy(Rectangle*) = default;
+
+export struct RectangleIterator {
+  Rectangle r;
+  Vec2 pos;
+};
+
+export RectangleIterator begin(Rectangle* r) {
+  return RectangleIterator(r->copy(), r->begin.copy());
+}
+
+export RectangleIterator end(Rectangle* r) {
+  return RectangleIterator(r->copy(), Vec2(r->begin.x, r->end.y));
+}
+
+export Vec2 operator * (RectangleIterator* it) {
+  return it->pos.copy();
+}
+
+export void operator ++ (RectangleIterator mutable* it) {
+  ++it->pos.x;
+  if (it->pos.x == it->r.end.x) {
+    it->pos.x = it->r.begin.x;
+    ++it->pos.y;
+  }
+}
+
+export bool operator == (RectangleIterator* it1, RectangleIterator* it2) {
+  return it1->pos == it2->pos;
+}
+
+export string to_string(Rectangle* r) {
+  return "(" + to_string(&r->begin) + ", " + to_string(&r->end) + ")";
+}

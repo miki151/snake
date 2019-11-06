@@ -1,0 +1,47 @@
+
+export import "rectangle.znn";
+export import "sdl.znn";
+export import "std/expected.znn";
+import "std/range.znn";
+
+export void checkError(string? error) {
+  if (error)
+    panic(*error);
+}
+
+export struct BoardCanvas {
+  Rectangle area;
+  int tileSize;
+  SDLSurface surface;
+};
+
+export void render(BoardCanvas* canvas) {
+  checkError(canvas->surface.clear(Color(0, 0, 0)));
+  canvas->drawBackground();
+}
+
+export Rectangle getTileArea(BoardCanvas* canvas) {
+  return Rectangle(canvas->area.begin / canvas->tileSize, canvas->area.end / canvas->tileSize);
+}
+
+Vec2 getCellMargin() {
+  return Vec2(0, 0);
+}
+
+export void drawImage(BoardCanvas* canvas, Vec2 pos, SDLSurface* image) {
+  checkError(canvas->surface.blitFrom(pos * canvas->tileSize + getCellMargin(), image));
+}
+ 
+export void fillTile(BoardCanvas* canvas, Vec2 pos, Color color) {
+  const rect = Rectangle(
+      pos * canvas->tileSize + getCellMargin(),
+      (pos + Vec2(1, 1)) * canvas->tileSize - getCellMargin(),
+  );
+  checkError(canvas->surface.drawFilledRectangle(&rect, move(color)));
+}
+
+void drawBackground(BoardCanvas* canvas) {
+  for (mutable v : canvas->getTileArea())
+    canvas->fillTile(v->copy(), Color(20, 20, 100));
+}
+
