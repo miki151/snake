@@ -194,7 +194,7 @@ export string? drawFilledRectangle(SDLSurface* s, Rectangle* rect, Color color) 
   return null;
 }
 
-export expected<SDLWindow> SDL_CreateWindow(Vec2? size) {
+export expected<SDLWindow> SDL_CreateWindow(Vec2? size, string title) {
   mutable SDLWindow? ret = null;
   mutable string? errorRet = null;
   const gen_error = [] (string s) -> expected<SDLWindow> {
@@ -208,7 +208,7 @@ export expected<SDLWindow> SDL_CreateWindow(Vec2? size) {
       gScreenRect.h = displayMode.h;
     }
 
-    auto window = SDL_CreateWindow( "SDL Tutorial", SDL_WINDOWPOS_UNDEFINED,
+    auto window = SDL_CreateWindow(title.data(), SDL_WINDOWPOS_UNDEFINED,
         SDL_WINDOWPOS_UNDEFINED, size ? size->x : gScreenRect.w, size ? size->y : gScreenRect.y,
         SDL_WINDOW_SHOWN );
     if (!window)

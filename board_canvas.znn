@@ -17,11 +17,12 @@ export struct BoardCanvas {
 
 export void render(BoardCanvas* canvas) {
   checkError(canvas->surface.clear(Color(0, 0, 0)));
+  checkError(canvas->surface.drawFilledRectangle(&canvas->area.plusMargin(5), Color(255, 255, 255)));
   canvas->drawBackground();
 }
 
 export Rectangle getTileArea(BoardCanvas* canvas) {
-  return Rectangle(canvas->area.begin / canvas->tileSize, canvas->area.end / canvas->tileSize);
+  return Rectangle(Vec2(0, 0), canvas->area.size() / canvas->tileSize);
 }
 
 Vec2 getCellMargin() {
@@ -29,19 +30,19 @@ Vec2 getCellMargin() {
 }
 
 export void drawImage(BoardCanvas* canvas, Vec2 pos, SDLSurface* image) {
-  checkError(canvas->surface.blitFrom(pos * canvas->tileSize + getCellMargin(), image));
+  checkError(canvas->surface.blitFrom(canvas->area.begin + pos * canvas->tileSize + getCellMargin(), image));
 }
  
 export void fillTile(BoardCanvas* canvas, Vec2 pos, Color color) {
   const rect = Rectangle(
-      pos * canvas->tileSize + getCellMargin(),
-      (pos + Vec2(1, 1)) * canvas->tileSize - getCellMargin(),
+      canvas->area.begin + pos * canvas->tileSize + getCellMargin(),
+      canvas->area.begin + (pos + Vec2(1, 1)) * canvas->tileSize - getCellMargin(),
   );
   checkError(canvas->surface.drawFilledRectangle(&rect, move(color)));
 }
 
 void drawBackground(BoardCanvas* canvas) {
   for (mutable v : canvas->getTileArea())
-    canvas->fillTile(v->copy(), Color(20, 20, 100));
+    canvas->fillTile(v->copy(), Color(20, 20, 20));
 }
 

@@ -18,10 +18,12 @@ embed {
 
 void drawMessage(SDLSurface* surface, SDLSurface* message) {
   const margin = Vec2(30, 30);
-  const window = Rectangle(
+  const windowInside = Rectangle(
       (surface->getSize() - message->getSize()) / 2 - margin,
       (surface->getSize() + message->getSize()) / 2 + margin);
-  checkError(surface->drawFilledRectangle(&window, Color(0, 0, 0)));
+  const window = windowInside.plusMargin(2);
+  checkError(surface->drawFilledRectangle(&window, Color(255, 255, 255)));
+  checkError(surface->drawFilledRectangle(&windowInside, Color(0, 0, 0)));
   checkError(surface->blitFrom(window.begin + margin, message));
 }
 
@@ -74,10 +76,14 @@ vector<SDLSurface> getSnakeImages(string path1, string path2, string path3, stri
   return move(ret);
 }
 
-vector<SDLSurface> getImages(string[] paths) {
-  mutable ret = vector<SDLSurface>();
-  for (mutable path : paths)
-    ret.push_back(*SDL_LoadBMP(*path));
+vector<vector<SDLSurface>> getImages(string[][] paths) {
+  mutable ret = vector<vector<SDLSurface>>();
+  for (mutable pathList : paths) {
+    mutable r = vector<SDLSurface>();
+    for (mutable path : *pathList)
+      r.push_back(*SDL_LoadBMP(*path));
+    ret.push_back(move(r));
+  }
   return move(ret);
 }
 
@@ -93,7 +99,11 @@ vector<vector<SDLSound>> getSounds(string[][] paths) {
 }
 
 int getSoundsIndex(int level) {
-  if (level % 5 == 0)
+  if (level % 6 == 0)
+    return 3;
+  if (level % 6 == 4)
+    return 2;
+  if (level % 6 == 2)
     return 1;
   return 0;
 }
@@ -119,7 +129,7 @@ vector<int> readHighscores(string path) {
   while (!!file)
     if (const v = file.read<int>()) {
       ret.push_back(*v);
-      print("Read score {*ret.back()}");
+//      print("Read score {*ret.back()}");
     }
   return move(ret);
 }
@@ -127,7 +137,7 @@ vector<int> readHighscores(string path) {
 void writeHighscores(string path, vector<int>* scores) {
   mutable file = output_file(move(path));
   for (mutable score : *scores) {
-    print("Writing score {*score}");
+ //   print("Writing score {*score}");
     file.write(&*score);
   }
 }
@@ -143,8 +153,8 @@ void presentHighscores(SDLWindow* window, SDLSurface* target, vector<int>* score
   checkError(target->drawFilledRectangle(&Rectangle(Vec2(0, height), target->getSize()), Color(0, 0, 0)));
   for (mutable i = scores.size() - 1; i >= scores.size() - 10 && i >= 0; --i) {
     const place = scores.size() - i;
-    const text = *window->drawText("{place}. Janus       {getPointsMult() * scores[i]}", Color(255, 255, 255), TextSize::SMALL);
-    checkError(target->blitFrom(Vec2(100, height + place * 50), &text));
+    const text = *window->drawText("{place}. Janus                {getPointsMult() * scores[i]}", Color(255, 255, 255), TextSize::SMALL);
+    checkError(target->blitFrom(Vec2(50, height + place * 50), &text));
   }
 //  checkError(window->update());
 //  SDLDelay(3000);
@@ -157,41 +167,58 @@ int main(string[]) {
   print("Writing in directory {writePath}");
   const highscoresPath = writePath + "highscores.txt";
   mutable highscores = readHighscores(highscoresPath);
-  const window = *SDL_CreateWindow(Vec2(640, 1136));
+  const window = *SDL_CreateWindow(Vec2(800, 1136), "Wąż Janus");
   const surface1 = *window.getSurface();
   const logo1 = *SDL_LoadBMP("logo1.bmp");
   const logo2 = *SDL_LoadBMP("logo2.bmp");
   showLogo(&window, &surface1, &logo1, &logo2);
-  const image = *SDL_LoadBMP("image1.bmp");
   const snakeImages = getSnakeImages("snake1.bmp", "snake2.bmp", "snake3.bmp", "snake4.bmp");
-  const appleImages = getImages({"apple1.bmp", "apple2.bmp", "apple3.bmp", "apple5.bmp", "apple4.bmp"}.slice());
+  const appleImages = getImages({
+      {"apple1.bmp", "apple3.bmp"}.slice(),
+      {"apple8.bmp"}.slice(),
+      {"apple6.bmp", "apple7.bmp"}.slice(),
+      {"apple9.bmp"}.slice(),
+      {"apple5.bmp"}.slice(),
+      {"apple4.bmp", "apple4a.bmp"}.slice()
+  }.slice());
   const eatSounds = getSounds({
       {"eat1.wav", "eat2.wav"}.slice(),
+      {"eat3.wav", "eat3a.wav"}.slice(),
+      {"eat4.wav", "eat4a.wav"}.slice(),
       {"piano1.wav", "piano2.wav", "piano3.wav", "piano4.wav", "piano5.wav", "piano6.wav", "piano7.wav"}.slice()
   }.slice());
   const endSounds = getSounds({
       {"eat_end.wav"}.slice(),
+      {"eat_end3.wav"}.slice(),
+      {"eat_end4.wav"}.slice(),
       {"piano_end.wav"}.slice()
   }.slice());
+  const screenWidth = surface1.getSize().x;
+  const tileWidth = 64;
+  const boardSize = 10;
+  const boardWidth = tileWidth * boardSize;
+  const topMargin = 20;
   const boardCanvas = BoardCanvas(
-      Rectangle(Vec2(0, 0), Vec2(640, 640)),
-      64,
+      Rectangle(Vec2((screenWidth - boardWidth) / 2, topMargin), Vec2((screenWidth + boardWidth) / 2, boardWidth + topMargin)),
+      tileWidth,
       move(surface1)
   );
+  print("canvas {boardCanvas.area}");
   const initialSnakeLength = 4;
   const initialNumApples = 16;
-  const buttonMargin = Vec2(20, 20);
+  const buttonMargin = Vec2(10, 10);
   const leftButton = Button(
       *SDL_LoadBMP("arrow.bmp"),
       Rectangle(
-        Vec2(0, boardCanvas.area.end.y + 180) + buttonMargin,
-        Vec2(boardCanvas.area.end.x / 2, boardCanvas.surface.getSize().y) - buttonMargin));
+        Vec2(0, boardCanvas.area.end.y + 90) + buttonMargin,
+        Vec2(boardCanvas.area.middle().x, boardCanvas.surface.getSize().y) - buttonMargin));
   const rightButton = Button(
       *SDL_LoadBMP("arrow.bmp")->transform(SDLTransformType::MIRROR_HOR),
       Rectangle(
-        Vec2(boardCanvas.area.end.x / 2, boardCanvas.area.end.y + 180) + buttonMargin,
-        Vec2(boardCanvas.area.end.x, boardCanvas.surface.getSize().y) - buttonMargin));
+        Vec2(boardCanvas.area.middle().x, boardCanvas.area.end.y + 90) + buttonMargin,
+        Vec2(screenWidth, boardCanvas.surface.getSize().y) - buttonMargin));
   mutable game = Game(boardCanvas.getTileArea(), initialSnakeLength, initialNumApples);
+  mutable isNewGame = true;
   mutable SDLSurface? message = null;
   mutable bool showScores = false;
   message = *window.drawText("Kliknij, by zaczac", Color(255, 255, 255), TextSize::SMALL);
@@ -219,7 +246,9 @@ int main(string[]) {
                   points = 0;
                   pointsText = window.drawPointsLabel(points);
                 }
-                game = Game(boardCanvas.getTileArea(), initialSnakeLength, initialNumApples);
+                if (!isNewGame)
+                  game = Game(boardCanvas.getTileArea(), initialSnakeLength, initialNumApples);
+                isNewGame = false;
               } else
                 exit = true;
             }
@@ -236,7 +265,9 @@ int main(string[]) {
               points = 0;
               pointsText = window.drawPointsLabel(points);
             }
-            game = Game(boardCanvas.getTileArea(), initialSnakeLength, initialNumApples);
+            if (!isNewGame)
+              game = Game(boardCanvas.getTileArea(), initialSnakeLength, initialNumApples);
+            isNewGame = false;
           } else {
             if (leftButton.isClicked(&mouseDown->pos))
               game.turnLeft();
@@ -274,7 +305,7 @@ int main(string[]) {
       }
     }
     boardCanvas.render();
-    game.render(&boardCanvas, &snakeImages, &appleImages[(level - 1) % appleImages.size()]);
+    game.render(&boardCanvas, &snakeImages, appleImages[(level - 1) % appleImages.size()].slice());
     if (message)
       drawMessage(&boardCanvas.surface, &*message);
     checkError(boardCanvas.surface.blitFrom(
@@ -289,7 +320,7 @@ int main(string[]) {
       presentHighscores(&window, &boardCanvas.surface, &highscores, boardCanvas.area.end.y + 160);
     checkError(window.update());
     if (!message)
-      SDLDelay(as_int(150.0 * pow(0.9, level)));
+      SDLDelay(as_int(150.0 * pow(0.8, level)));
     if (restart) {
       SDLDelay(300);
       SDLFlushEvents();

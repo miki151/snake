@@ -15,6 +15,14 @@ export Vec2 size(Rectangle* r) {
   return r->end - r->begin;
 }
 
+export Vec2 middle(Rectangle* r) {
+  return (r->end + r->begin) / 2;
+}
+
+export Rectangle plusMargin(Rectangle* r, int width) {
+  return Rectangle(r->begin - Vec2(width, width), r->end + Vec2(width, width));
+}
+
 export bool overlaps(Rectangle* r1, Rectangle* r2) {
   const x1 = r1->x_range();
   const x2 = r2->x_range();

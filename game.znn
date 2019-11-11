@@ -64,9 +64,11 @@ int getImageIndex(vector<Vec2>* snake, int index) {
 }
 
 export void render(Game* game, BoardCanvas* canvas, vector<SDLSurface>* snakeImages,
-    SDLSurface* appleImage) {
-  for (mutable pos : game->apples)
-    canvas->drawImage(pos->copy(), appleImage);
+    SDLSurface[] appleImages) {
+  for (mutable pos : game->apples) {
+    const image = &appleImages[(pos->x * 3 + pos->y * 13) % appleImages.size()];
+    canvas->drawImage(pos->copy(), image);
+  }
   for (mutable i : range(0, game->snake.size()))
     canvas->drawImage(game->snake[i].copy(), &(*snakeImages)[getImageIndex(&game->snake, i)]);
 }
@@ -109,10 +111,14 @@ export GameUpdateResult update(Game mutable* game) {
 }
 
 export void turnLeft(Game mutable* game) {
-  game->snakeDir = game->snakeDir.rotateLeft();
+  const newDir = game->snakeDir.rotateLeft();
+  if (!game->snake.find(&(game->snake[0] + Vec2(newDir))))
+    game->snakeDir = newDir;
 }
 
 export void turnRight(Game mutable* game) {
-  game->snakeDir = game->snakeDir.rotateRight();
+  const newDir = game->snakeDir.rotateRight();
+  if (!game->snake.find(&(game->snake[0] + Vec2(newDir))))
+    game->snakeDir = newDir;
 }
 
